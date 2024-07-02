@@ -41,23 +41,22 @@ func main() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
-	if err := rabbitClient.Send(ctx, "customer_events", "customers.created.us", amqp091.Publishing{
-		ContentType:  "text/plain",
-		DeliveryMode: amqp091.Persistent,
-		Body:         []byte(`an cool message between customers`),
-	}); err != nil {
-		panic(err)
+	for i := 0; i < 10; i++ {
+		if err := rabbitClient.Send(ctx, "customer_events", "customers.created.us", amqp091.Publishing{
+			ContentType:  "text/plain",
+			DeliveryMode: amqp091.Persistent,
+			Body:         []byte(`an cool message between customers`),
+		}); err != nil {
+			panic(err)
+		}
+		if err := rabbitClient.Send(ctx, "customer_events", "customers.test", amqp091.Publishing{
+			ContentType:  "text/plain",
+			DeliveryMode: amqp091.Transient,
+			Body:         []byte(`an uncool undurable message`),
+		}); err != nil {
+			panic(err)
+		}
 	}
-
-	if err := rabbitClient.Send(ctx, "customer_events", "customers.test", amqp091.Publishing{
-		ContentType:  "text/plain",
-		DeliveryMode: amqp091.Transient,
-		Body:         []byte(`an uncool undurable message`),
-	}); err != nil {
-		panic(err)
-	}
-
-	time.Sleep(time.Second * 5)
 
 	log.Println(rabbitClient)
 }
