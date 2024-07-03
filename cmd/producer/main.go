@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"time"
 
@@ -15,48 +16,60 @@ func main() {
 		panic(err)
 	}
 	defer conn.Close()
-
-	rabbitClient, err := internal.NewRabbitClient(conn)
+	consumeConn, err := internal.ConnectRabbit("matthew", "secret", "localhost:5672", "customers")
 	if err != nil {
 		panic(err)
 	}
-	defer rabbitClient.Close()
+	defer consumeConn.Close()
 
-	if err := rabbitClient.CreateQueue("customers_created", true, false); err != nil {
+	client, err := internal.NewRabbitClient(conn)
+	if err != nil {
+		panic(err)
+	}
+	defer client.Close()
+
+	consumeClient, err := internal.NewRabbitClient(consumeConn)
+	if err != nil {
+		panic(err)
+	}
+	defer consumeClient.Close()
+
+	queue, err := consumeClient.CreateQueue("", true, true)
+	if err != nil {
 		panic(err)
 	}
 
-	if err := rabbitClient.CreateQueue("customers_test", false, true); err != nil {
+	if err := consumeClient.CreateBinding(queue.Name, queue.Name, "customer_callbacks"); err != nil {
 		panic(err)
 	}
 
-	if err := rabbitClient.CreateBinding("customers_created", "customers.created.*", "customer_events"); err != nil {
+	messageBus, err := consumeClient.Consume(queue.Name, "constumer-api", false)
+	if err != nil {
 		panic(err)
 	}
 
-	if err := rabbitClient.CreateBinding("customers_test", "customers.*", "customer_events"); err != nil {
-		panic(err)
-	}
+	go func() {
+		for message := range messageBus {
+			log.Printf("New message: %s", message.CorrelationId)
+		}
+	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
 	defer cancel()
 
 	for i := 0; i < 10; i++ {
-		if err := rabbitClient.Send(ctx, "customer_events", "customers.created.us", amqp091.Publishing{
-			ContentType:  "text/plain",
-			DeliveryMode: amqp091.Persistent,
-			Body:         []byte(`an cool message between customers`),
-		}); err != nil {
-			panic(err)
-		}
-		if err := rabbitClient.Send(ctx, "customer_events", "customers.test", amqp091.Publishing{
-			ContentType:  "text/plain",
-			DeliveryMode: amqp091.Transient,
-			Body:         []byte(`an uncool undurable message`),
+		if err := client.Send(ctx, "customer_events", "customers.created.us", amqp091.Publishing{
+			ContentType:   "text/plain",
+			DeliveryMode:  amqp091.Persistent,
+			ReplyTo:       queue.Name,
+			Body:          []byte(`an cool message between customers`),
+			CorrelationId: fmt.Sprintf("correlation-%d", i),
 		}); err != nil {
 			panic(err)
 		}
 	}
 
-	log.Println(rabbitClient)
+	log.Println(client)
+	var blocking chan struct{}
+	<-blocking
 }
