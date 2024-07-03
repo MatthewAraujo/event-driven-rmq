@@ -85,3 +85,12 @@ func (rc RabbitClient) Consume(queue, consumer string, autoAck bool) (<-chan amq
 		nil,
 	)
 }
+
+// ApplyQos-
+// prefetch count - an integer on how many unackowledge messeges the serve can send
+// prefetch - is int of how many bytes
+// global - Determines if the rule should be applied to all consumers
+func (rc RabbitClient) SetQos(prefetchCount, prefetchSize int, global bool) error {
+
+	return rc.ch.Qos(prefetchCount, prefetchSize, global)
+}

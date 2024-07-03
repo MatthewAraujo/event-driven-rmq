@@ -58,6 +58,9 @@ func main() {
 
 	g, ctx := errgroup.WithContext(ctx)
 
+	if err := rabbitClient.SetQos(10, 0, true); err != nil {
+		panic(err)
+	}
 	// errgroup allows us concurrent tasks-
 	g.SetLimit(10)
 
